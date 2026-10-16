@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sucheZahl – Bausteine ordnen</title>
+<style>
+:root{
+  --bg:#f3f6fa; --grid:#d9e2ee; --ink:#14213d; --muted:#5b6b82;
+  --card:#ffffff; --line:#b8c6da; --accent:#2446c9; --accent-soft:#e3e9ff;
+  --ok:#17803d; --ok-bg:#dff5e6; --bad:#b3261e; --bad-bg:#fde7e5;
+  --mono:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
+  --sans:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0f1624; --grid:#1b263b; --ink:#e8eefb; --muted:#9fb0cc;
+    --card:#18233a; --line:#3a4b6b; --accent:#8fa8ff; --accent-soft:#25335a;
+    --ok:#6fdc97; --ok-bg:#16382a; --bad:#ff8f87; --bad-bg:#42201f;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  font-family:var(--sans); color:var(--ink); background-color:var(--bg);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:24px 24px; min-height:100vh;
+  padding:20px 16px 48px; line-height:1.45;
+}
+main{max-width:760px;margin:0 auto}
+h1{font-size:1.5rem;margin:0 0 4px}
+.task{margin:0 0 18px;color:var(--muted);max-width:60ch}
+.task code,.hint code{font-family:var(--mono);background:var(--accent-soft);padding:1px 5px;border-radius:4px;color:var(--ink)}
+h2{font-size:1rem;margin:22px 0 8px}
+.sheet{background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:14px 12px;font-family:var(--mono);font-size:.95rem}
+.line{display:flex;align-items:center;min-height:46px;margin:4px 0}
+.line.static{color:var(--muted);min-height:34px}
+.num{width:26px;flex:none;color:var(--muted);font-size:.8rem;text-align:right;margin-right:10px;user-select:none}
+.indent{flex:none}
+.slot{flex:1;min-height:42px;border:2px dashed var(--line);border-radius:8px;display:flex;align-items:center;transition:background .15s,border-color .15s}
+.slot:empty::before{content:"hierher ziehen";color:var(--muted);font-family:var(--sans);font-size:.8rem;padding-left:12px}
+.slot.over{background:var(--accent-soft);border-color:var(--accent)}
+.slot.ok{border:2px solid var(--ok);background:var(--ok-bg)}
+.slot.bad{border:2px solid var(--bad);background:var(--bad-bg)}
+.slot .block{margin:0;border:none;box-shadow:none;background:transparent;width:100%}
+#pool{display:flex;flex-direction:column;gap:8px;padding:12px;min-height:80px;border:2px dashed var(--line);border-radius:10px;background:color-mix(in srgb,var(--card) 70%,transparent)}
+#pool.over{border-color:var(--accent);background:var(--accent-soft)}
+.block{
+  font-family:var(--mono);font-size:.92rem;padding:10px 14px;border-radius:8px;
+  background:var(--card);border:1.5px solid var(--accent);box-shadow:0 2px 0 var(--accent);
+  cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;
+}
+.block:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.block.dragging{opacity:.35}
+.ghost{position:fixed;z-index:99;pointer-events:none;box-shadow:0 8px 20px rgba(0,0,0,.25);transform:rotate(-1.5deg)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;align-items:center}
+button{font:inherit;font-weight:600;padding:9px 16px;border-radius:8px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}
+@media (prefers-color-scheme:dark){button{color:#0f1624}}
+button.ghostbtn{background:transparent;color:var(--accent)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+#msg{margin:12px 0 0;font-weight:600;min-height:1.4em}
+#msg.ok{color:var(--ok)} #msg.bad{color:var(--bad)}
+.hint{color:var(--muted);margin:4px 0 0;min-height:1.4em}
+#trace{display:none;margin-top:6px}
+#trace.show{display:block}
+.cells{display:flex;gap:6px;margin:10px 0 6px;flex-wrap:wrap}
+.cell{width:56px;text-align:center;font-family:var(--mono)}
+.cell .v{border:2px solid var(--line);border-radius:8px;padding:8px 0;background:var(--card);font-size:1.1rem}
+.cell .i{font-size:.75rem;color:var(--muted);margin-top:2px}
+.cell.cur .v{border-color:var(--accent);background:var(--accent-soft)}
+.cell.hit .v{border-color:var(--ok);background:var(--ok-bg)}
+.cell.cur .i{color:var(--accent);font-weight:700}
+.state{font-family:var(--mono);margin:6px 0}
+.state b{color:var(--accent)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <h1>sucheZahl: Bausteine ordnen</h1>
+  <p class="task">Die Methode soll den Index von <code>gesuchtezahl</code> im Array <code>liste</code> zurückgeben, oder <code>-1</code>, wenn die Zahl nicht vorkommt. Ziehe die Bausteine in die richtige Reihenfolge. Nicht jeder Baustein wird gebraucht.</p>
+
+  <div class="sheet" id="code" aria-label="Pseudocode"></div>
+
+  <h2>Bausteine</h2>
+  <div id="pool" aria-label="Bausteine"></div>
+
+  <div class="bar">
+    <button id="check">Prüfen</button>
+    <button id="tipp" class="ghostbtn">Tipp</button>
+    <button id="reset" class="ghostbtn">Neu mischen</button>
+  </div>
+  <p id="msg" role="status"></p>
+  <p class="hint" id="hint"></p>
+
+  <section id="trace">
+    <h2>So läuft der Algorithmus ab</h2>
+    <p class="hint">Beispiel: <code>gesuchtezahl = 7</code></p>
+    <div class="cells" id="cells"></div>
+    <div class="state" id="state"></div>
+    <div class="bar"><button id="play">Ablauf zeigen</button></div>
+  </section>
+</main>
+
+<script>
+/* ===== Aufgabe: hier lässt sich alles anpassen ===== */
+const HEADER = "Methode sucheZahl(gesuchtezahl)";
+// Reihenfolge = richtige Lösung. indent = Einrückung im Pseudocode.
+const SOLUTION = [
+  {t:"ausgabe ← -1", indent:0, hint:"Zuerst legst du den Startwert fest: „nicht gefunden“."},
+  {t:"wiederhole für i von 0 bis liste.length − 1", indent:0, hint:"Du musst jede Position der Liste einmal ansehen."},
+  {t:"wenn liste[i] gleich gesuchtezahl ist", indent:1, hint:"In der Schleife vergleichst du das Element mit der gesuchten Zahl."},
+  {t:"ausgabe ← i", indent:2, hint:"Bei einem Treffer merkst du dir den Index, nicht den Wert."},
+  {t:"gib ausgabe zurück", indent:0, hint:"Erst nach der Schleife ist klar, was herauskommt."}
+];
+const DISTRACTORS = ["wenn liste[i] ungleich gesuchtezahl ist", "ausgabe ← liste[i]"];
+// Statische Zeilen, die nach Slot-Nr. eingefügt werden
+const STATIC_AFTER = {3:[{t:"ende wenn",indent:1},{t:"ende wiederhole",indent:0}]};
+const DEMO = {liste:[4,7,2,7,9], gesuchte:7};
+/* ==================================================== */
+
+const code = document.getElementById("code");
+const pool = document.getElementById("pool");
+const msg = document.getElementById("msg");
+const hint = document.getElementById("hint");
+const IND = 22;
+
+function lineEl(text, indent, num){
+  const d = document.createElement("div"); d.className="line static";
+  d.innerHTML = '<span class="num">'+(num||"")+'</span><span class="indent" style="width:'+indent*IND+'px"></span>'+text;
+  return d;
+}
+function build(){
+  code.innerHTML=""; pool.innerHTML=""; msg.textContent=""; msg.className=""; hint.textContent="";
+  document.getElementById("trace").classList.remove("show");
+  code.append(lineEl(HEADER,0,""));
+  let n=1;
+  SOLUTION.forEach((s,i)=>{
+    const l=document.createElement("div"); l.className="line";
+    l.innerHTML='<span class="num">'+(n++)+'</span><span class="indent" style="width:'+(s.indent+1)*IND+'px"></span>';
+    const slot=document.createElement("div"); slot.className="slot"; slot.dataset.i=i;
+    l.append(slot); code.append(l);
+    (STATIC_AFTER[i]||[]).forEach(st=>code.append(lineEl(st.t,st.indent+1,n++)));
+  });
+  const all = SOLUTION.map((s,i)=>({t:s.t,id:String(i)}))
+    .concat(DISTRACTORS.map((t,k)=>({t,id:"x"+k})));
+  all.sort(()=>Math.random()-.5);
+  all.forEach(b=>{
+    const el=document.createElement("div"); el.className="block"; el.textContent=b.t;
+    el.dataset.id=b.id; el.tabIndex=0; el.addEventListener("pointerdown",down);
+    pool.append(el);
+  });
+}
+
+/* ---- Drag & Drop per Pointer-Events (Maus, Touch, Stift, iPad) ---- */
+let drag=null, ghost=null, off={x:0,y:0};
+function down(e){
+  e.preventDefault();
+  drag=e.currentTarget;
+  const r=drag.getBoundingClientRect();
+  off={x:e.clientX-r.left,y:e.clientY-r.top};
+  ghost=drag.cloneNode(true); ghost.classList.add("ghost");
+  ghost.style.width=r.width+"px"; ghost.style.background="var(--card)";
+  document.body.append(ghost); drag.classList.add("dragging");
+  move(e);
+  addEventListener("pointermove",move);
+  addEventListener("pointerup",up,{once:true});
+  addEventListener("pointercancel",up,{once:true});
+}
+function target(x,y){ const el=document.elementFromPoint(x,y); return el&&el.closest(".slot,#pool"); }
+function move(e){
+  ghost.style.left=(e.clientX-off.x)+"px"; ghost.style.top=(e.clientY-off.y)+"px";
+  document.querySelectorAll(".over").forEach(o=>o.classList.remove("over"));
+  const t=target(e.clientX,e.clientY); if(t) t.classList.add("over");
+}
+function up(e){
+  removeEventListener("pointermove",move);
+  document.querySelectorAll(".over").forEach(o=>o.classList.remove("over"));
+  const t=target(e.clientX,e.clientY);
+  ghost.remove(); drag.classList.remove("dragging");
+  if(t){
+    if(t.classList.contains("slot")){
+      const old=t.firstElementChild; if(old&&old!==drag) pool.append(old);
+      t.append(drag);
+    } else pool.append(drag);
+    clearMarks();
+  }
+  drag=null;
+}
+function clearMarks(){
+  document.querySelectorAll(".slot").forEach(s=>s.classList.remove("ok","bad"));
+  msg.textContent=""; msg.className=""; hint.textContent="";
+}
+
+/* ---- Prüfen / Tipp ---- */
+function status(){
+  return [...document.querySelectorAll(".slot")].map(s=>{
+    const b=s.firstElementChild; return {s,b,ok:!!b&&b.dataset.id===s.dataset.i};
+  });
+}
+document.getElementById("check").onclick=()=>{
+  const st=status(); let good=0;
+  st.forEach(x=>{ x.s.classList.remove("ok","bad"); if(x.b){ x.s.classList.add(x.ok?"ok":"bad"); } if(x.ok) good++; });
+  const empty=st.filter(x=>!x.b).length;
+  if(good===st.length){
+    msg.className="ok"; msg.textContent="Richtig! Alle Bausteine sitzen. Schau dir unten den Ablauf an.";
+    document.getElementById("trace").classList.add("show"); initTrace();
+  } else {
+    msg.className="bad";
+    msg.textContent=good+" von "+st.length+" richtig"+(empty?" ("+empty+" Platz/Plätze noch leer)":"")+". Rot markierte Bausteine gehören woanders hin.";
+  }
+};
+document.getElementById("tipp").onclick=()=>{
+  const first=status().find(x=>!x.ok);
+  hint.textContent = first ? "Tipp für Zeile "+(+first.s.dataset.i+1)+": "+SOLUTION[first.s.dataset.i].hint : "Du hast schon alles richtig.";
+};
+document.getElementById("reset").onclick=build;
+
+/* ---- Ablauf-Animation ---- */
+const cells=document.getElementById("cells"), state=document.getElementById("state");
+let timer=null;
+function initTrace(){
+  clearInterval(timer);
+  cells.innerHTML=DEMO.liste.map((v,i)=>'<div class="cell" id="c'+i+'"><div class="v">'+v+'</div><div class="i">'+i+'</div></div>').join("");
+  state.innerHTML="ausgabe = <b>-1</b>";
+}
+document.getElementById("play").onclick=()=>{
+  initTrace(); let i=0, ausgabe=-1;
+  timer=setInterval(()=>{
+    document.querySelectorAll(".cell").forEach(c=>c.classList.remove("cur"));
+    if(i>=DEMO.liste.length){
+      clearInterval(timer);
+      state.innerHTML="Rückgabe: <b>"+ausgabe+"</b> (ohne <code>break</code> gewinnt der letzte Treffer)";
+      return;
+    }
+    const c=document.getElementById("c"+i); c.classList.add("cur");
+    const hit=DEMO.liste[i]===DEMO.gesuchte;
+    if(hit){ ausgabe=i; c.classList.add("hit"); }
+    state.innerHTML="i = <b>"+i+"</b>: liste["+i+"] = "+DEMO.liste[i]+" → "+(hit?"gleich, ausgabe = <b>"+i+"</b>":"ungleich, ausgabe bleibt <b>"+ausgabe+"</b>");
+    i++;
+  },1100);
+};
+
+build();
+</script>
+</body>
+</html>
